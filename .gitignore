@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.log
+bot-state.json
+trade-history.json
+.DS_Store

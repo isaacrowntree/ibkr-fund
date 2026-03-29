@@ -1,0 +1,31 @@
+{
+  "name": "ibkr-fund",
+  "version": "0.1.0",
+  "description": "IBKR portfolio allocation fund with Paperclip multi-agent management",
+  "private": true,
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "agent:manager": "node dist/agents/managing-partner.js",
+    "agent:portfolio": "node dist/agents/portfolio-manager.js",
+    "agent:risk": "node dist/agents/risk-monitor.js",
+    "agent:rebalancer": "node dist/agents/rebalancer.js",
+    "agent:research": "node dist/agents/research-scout.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@stoqey/ib": "^1.5.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
