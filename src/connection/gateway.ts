@@ -52,7 +52,7 @@ export function connect(): Promise<void> {
     });
 
     on(ibApi, EventName.error, (err: Error, code: ErrorCode, reqId: number) => {
-      const infoish = [2104, 2106, 2158].includes(code);
+      const infoish = [2104, 2106, 2158, 10167].includes(code);
       if (!infoish) {
         logError(`IB error [${code}] reqId=${reqId}`, err);
       }
