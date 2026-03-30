@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sampleCovMatrix, covToCorr, ledoitWolfShrinkage } from './covariance';
+import { sampleCovMatrix, covToCorr, ledoitWolfShrinkage, matMultiply, matTranspose, matInverse, matVecMultiply } from './covariance';
 
 describe('sampleCovMatrix', () => {
   it('computes exact 2x2 covariance matrix', () => {
@@ -47,6 +47,77 @@ describe('covToCorr', () => {
     expect(corr[0][1]).toBeLessThanOrEqual(1);
     // corr = 0.01 / (0.2 * 0.3) = 0.1667
     expect(corr[0][1]).toBeCloseTo(0.1667, 3);
+  });
+});
+
+describe('matMultiply', () => {
+  it('multiplies 2x2 identity by matrix', () => {
+    const I = [[1, 0], [0, 1]];
+    const A = [[3, 4], [5, 6]];
+    const result = matMultiply(I, A);
+    expect(result).toEqual([[3, 4], [5, 6]]);
+  });
+
+  it('multiplies 2x3 by 3x2', () => {
+    const A = [[1, 2, 3], [4, 5, 6]];
+    const B = [[7, 8], [9, 10], [11, 12]];
+    const result = matMultiply(A, B);
+    // [1*7+2*9+3*11, 1*8+2*10+3*12] = [58, 64]
+    // [4*7+5*9+6*11, 4*8+5*10+6*12] = [139, 154]
+    expect(result).toEqual([[58, 64], [139, 154]]);
+  });
+});
+
+describe('matTranspose', () => {
+  it('transposes a 2x3 matrix', () => {
+    const A = [[1, 2, 3], [4, 5, 6]];
+    const result = matTranspose(A);
+    expect(result).toEqual([[1, 4], [2, 5], [3, 6]]);
+  });
+
+  it('transpose of transpose is original', () => {
+    const A = [[1, 2], [3, 4]];
+    expect(matTranspose(matTranspose(A))).toEqual(A);
+  });
+});
+
+describe('matInverse', () => {
+  it('inverts a 2x2 matrix', () => {
+    const A = [[4, 7], [2, 6]];
+    const inv = matInverse(A);
+    // det = 24 - 14 = 10, inv = [[0.6, -0.7], [-0.2, 0.4]]
+    expect(inv[0][0]).toBeCloseTo(0.6, 6);
+    expect(inv[0][1]).toBeCloseTo(-0.7, 6);
+    expect(inv[1][0]).toBeCloseTo(-0.2, 6);
+    expect(inv[1][1]).toBeCloseTo(0.4, 6);
+  });
+
+  it('A * A^-1 = I', () => {
+    const A = [[2, 1], [5, 3]];
+    const inv = matInverse(A);
+    const product = matMultiply(A, inv);
+    expect(product[0][0]).toBeCloseTo(1, 10);
+    expect(product[0][1]).toBeCloseTo(0, 10);
+    expect(product[1][0]).toBeCloseTo(0, 10);
+    expect(product[1][1]).toBeCloseTo(1, 10);
+  });
+
+  it('throws for singular matrix', () => {
+    const A = [[1, 2], [2, 4]];
+    expect(() => matInverse(A)).toThrow('singular');
+  });
+});
+
+describe('matVecMultiply', () => {
+  it('multiplies identity by vector', () => {
+    const I = [[1, 0], [0, 1]];
+    expect(matVecMultiply(I, [3, 5])).toEqual([3, 5]);
+  });
+
+  it('multiplies 2x2 by vector', () => {
+    const A = [[2, 3], [4, 5]];
+    // [2*1+3*2, 4*1+5*2] = [8, 14]
+    expect(matVecMultiply(A, [1, 2])).toEqual([8, 14]);
   });
 });
 

@@ -104,3 +104,85 @@ export function matScale(m: number[][], s: number): number[][] {
 export function matAdd(a: number[][], b: number[][]): number[][] {
   return a.map((row, i) => row.map((v, j) => v + b[i][j]));
 }
+
+/** Matrix multiplication: a (m x p) * b (p x n) → (m x n) */
+export function matMultiply(a: number[][], b: number[][]): number[][] {
+  const m = a.length;
+  const p = b.length;
+  const n = b[0]?.length || 0;
+  const result: number[][] = Array.from({ length: m }, () => new Array(n).fill(0));
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < n; j++) {
+      let sum = 0;
+      for (let k = 0; k < p; k++) {
+        sum += a[i][k] * b[k][j];
+      }
+      result[i][j] = sum;
+    }
+  }
+  return result;
+}
+
+/** Transpose of a matrix */
+export function matTranspose(a: number[][]): number[][] {
+  const m = a.length;
+  const n = a[0]?.length || 0;
+  const result: number[][] = Array.from({ length: n }, () => new Array(m).fill(0));
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < n; j++) {
+      result[j][i] = a[i][j];
+    }
+  }
+  return result;
+}
+
+/** Matrix inverse using Gauss-Jordan elimination */
+export function matInverse(a: number[][]): number[][] {
+  const n = a.length;
+  // Build augmented matrix [A | I]
+  const aug: number[][] = a.map((row, i) => [
+    ...row.map(v => v),
+    ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)),
+  ]);
+
+  for (let col = 0; col < n; col++) {
+    // Partial pivot
+    let maxRow = col;
+    let maxVal = Math.abs(aug[col][col]);
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(aug[row][col]) > maxVal) {
+        maxVal = Math.abs(aug[row][col]);
+        maxRow = row;
+      }
+    }
+    if (maxVal < 1e-12) {
+      throw new Error('Matrix is singular or nearly singular');
+    }
+    if (maxRow !== col) {
+      [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+    }
+
+    // Scale pivot row
+    const pivot = aug[col][col];
+    for (let j = 0; j < 2 * n; j++) {
+      aug[col][j] /= pivot;
+    }
+
+    // Eliminate column
+    for (let row = 0; row < n; row++) {
+      if (row === col) continue;
+      const factor = aug[row][col];
+      for (let j = 0; j < 2 * n; j++) {
+        aug[row][j] -= factor * aug[col][j];
+      }
+    }
+  }
+
+  // Extract right half
+  return aug.map(row => row.slice(n));
+}
+
+/** Matrix-vector multiply: m (n x p) * v (p) → (n) */
+export function matVecMultiply(m: number[][], v: number[]): number[] {
+  return m.map(row => row.reduce((sum, val, j) => sum + val * v[j], 0));
+}
