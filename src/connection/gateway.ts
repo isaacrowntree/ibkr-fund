@@ -42,7 +42,7 @@ export function connect(): Promise<void> {
 
     const timeout = setTimeout(() => {
       reject(new Error(`Connection to IB Gateway timed out (${config.ib.host}:${config.ib.port})`));
-    }, 15_000);
+    }, 30_000);
 
     (ibApi as any).once(EventName.nextValidId, (id: number) => {
       clearTimeout(timeout);

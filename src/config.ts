@@ -11,7 +11,7 @@ export const config = {
   ib: {
     host: process.env.IB_HOST || '127.0.0.1',
     port: parseInt(process.env.IB_PORT || '4002', 10),
-    clientId: parseInt(process.env.IB_CLIENT_ID || '1', 10),
+    clientId: parseInt(process.env.IB_CLIENT_ID || String(Math.floor(Math.random() * 900) + 100), 10),
   },
   tradingMode: (process.env.TRADING_MODE || 'paper') as 'paper' | 'live',
   rebalance: {
