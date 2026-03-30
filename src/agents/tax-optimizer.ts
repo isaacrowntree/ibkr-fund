@@ -2,7 +2,7 @@
  * Tax Optimizer
  * Daily scan for tax-loss harvesting opportunities, manages wash sale restrictions.
  */
-import { connect, disconnect, getAccountSummary, getMarketPrices } from '../connection/gateway.js';
+import { connect, disconnect, getAccountSummary, getMarketPrices , requestDelayedData } from '../connection/gateway.js';
 import { TARGET_PORTFOLIO } from '../config.js';
 import { findHarvestCandidates, createWashSaleEntry, WashSaleEntry, TaxLot } from '../tax/harvesting.js';
 import { loadState, saveState } from '../state/store.js';
@@ -13,6 +13,7 @@ const AGENT = 'TaxOptimizer';
 async function run(): Promise<void> {
   log('Tax optimization scan starting', AGENT);
   await connect();
+  requestDelayedData();
 
   try {
     const account = await getAccountSummary();

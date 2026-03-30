@@ -2,7 +2,7 @@
  * Research Scout
  * Market scanning, price monitoring, significant move detection.
  */
-import { connect, disconnect, getMarketPrices } from '../connection/gateway.js';
+import { connect, disconnect, getMarketPrices , requestDelayedData } from '../connection/gateway.js';
 import { TARGET_PORTFOLIO } from '../config.js';
 import { loadState, saveState } from '../state/store.js';
 import { log, logError } from '../log.js';
@@ -19,6 +19,7 @@ interface PriceSnapshot {
 async function run(): Promise<void> {
   log('Market scan starting', AGENT);
   await connect();
+  requestDelayedData();
 
   try {
     const symbols = TARGET_PORTFOLIO.map(t => t.symbol);

@@ -2,7 +2,7 @@
  * Portfolio Strategist
  * Runs portfolio construction algorithms (HRP, risk parity) and determines target weights.
  */
-import { connect, disconnect, getAccountSummary, getMarketPrices } from '../connection/gateway.js';
+import { connect, disconnect, getAccountSummary, getMarketPrices , requestDelayedData } from '../connection/gateway.js';
 import { TARGET_PORTFOLIO, validateTargets } from '../config.js';
 import { hrpWeights } from '../portfolio/hrp.js';
 import { riskParityWeights } from '../portfolio/risk-parity.js';
@@ -16,6 +16,7 @@ async function run(): Promise<void> {
   log('Portfolio strategy analysis starting', AGENT);
   validateTargets();
   await connect();
+  requestDelayedData();
 
   try {
     const account = await getAccountSummary();

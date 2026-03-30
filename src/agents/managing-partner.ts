@@ -2,7 +2,7 @@
  * Managing Partner (CEO)
  * Orchestrates the fund: checks portfolio, delegates to risk/strategy/execution.
  */
-import { connect, disconnect, getAccountSummary, getMarketPrices } from '../connection/gateway.js';
+import { connect, disconnect, getAccountSummary, getMarketPrices, requestDelayedData } from '../connection/gateway.js';
 import { TARGET_PORTFOLIO, validateTargets } from '../config.js';
 import { loadState, saveState } from '../state/store.js';
 import { log, logError } from '../log.js';
@@ -13,6 +13,7 @@ async function run(): Promise<void> {
   log('Fund oversight cycle starting', AGENT);
   validateTargets();
   await connect();
+  requestDelayedData();
 
   try {
     const account = await getAccountSummary();

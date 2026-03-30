@@ -62,6 +62,13 @@ export function connect(): Promise<void> {
   });
 }
 
+/** Request delayed market data (free, no subscription needed) */
+export function requestDelayedData(): void {
+  const api = getApi();
+  api.reqMarketDataType(3); // 3 = delayed, 4 = delayed-frozen
+  log('Switched to delayed market data');
+}
+
 export function disconnect(): void {
   if (ibApi) {
     ibApi.disconnect();

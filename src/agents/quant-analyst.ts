@@ -2,7 +2,7 @@
  * Quant Analyst
  * Generates factor signals, detects market regime, feeds data to the strategist.
  */
-import { connect, disconnect, getMarketPrices } from '../connection/gateway.js';
+import { connect, disconnect, getMarketPrices , requestDelayedData } from '../connection/gateway.js';
 import { TARGET_PORTFOLIO } from '../config.js';
 import { trendSignal, volRegimeSignal, compositeRegime } from '../quant/regime.js';
 import { realizedVolatility, annualizeVol } from '../risk/volatility.js';
@@ -14,6 +14,7 @@ const AGENT = 'QuantAnalyst';
 async function run(): Promise<void> {
   log('Quant analysis starting', AGENT);
   await connect();
+  requestDelayedData();
 
   try {
     const symbols = TARGET_PORTFOLIO.map(t => t.symbol);

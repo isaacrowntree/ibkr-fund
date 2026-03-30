@@ -2,7 +2,7 @@
  * Risk Manager
  * VaR/CVaR, drawdown control, volatility targeting, correlation monitoring.
  */
-import { connect, disconnect, getAccountSummary, getMarketPrices } from '../connection/gateway.js';
+import { connect, disconnect, getAccountSummary, getMarketPrices , requestDelayedData } from '../connection/gateway.js';
 import { TARGET_PORTFOLIO } from '../config.js';
 import { historicalVaR, conditionalVaR } from '../risk/var.js';
 import { assessDrawdown, maxDrawdown } from '../risk/drawdown.js';
@@ -16,6 +16,7 @@ const TARGET_VOL = 0.12; // 12% annualized target volatility
 async function run(): Promise<void> {
   log('Risk assessment starting', AGENT);
   await connect();
+  requestDelayedData();
 
   try {
     const account = await getAccountSummary();
