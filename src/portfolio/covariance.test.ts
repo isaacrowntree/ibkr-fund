@@ -2,17 +2,22 @@ import { describe, it, expect } from 'vitest';
 import { sampleCovMatrix, covToCorr, ledoitWolfShrinkage } from './covariance';
 
 describe('sampleCovMatrix', () => {
-  it('computes 2x2 covariance matrix', () => {
+  it('computes exact 2x2 covariance matrix', () => {
     const returns = [
       [0.01, -0.01, 0.02, -0.02, 0.01],
       [0.02, -0.02, 0.01, -0.01, 0.02],
     ];
+    // mean1 = 0.002, mean2 = 0.004
+    // cov[0][0] = sum((r1-m1)^2)/4 = 0.00027
+    // cov[0][1] = sum((r1-m1)(r2-m2))/4 = 0.00024
+    // cov[1][1] = sum((r2-m2)^2)/4 = 0.00033
     const cov = sampleCovMatrix(returns);
     expect(cov).toHaveLength(2);
     expect(cov[0]).toHaveLength(2);
-    expect(cov[0][0]).toBeGreaterThan(0); // variance > 0
-    expect(cov[1][1]).toBeGreaterThan(0);
-    expect(cov[0][1]).toBe(cov[1][0]); // symmetric
+    expect(cov[0][0]).toBeCloseTo(0.00027, 6);
+    expect(cov[0][1]).toBeCloseTo(0.00024, 6);
+    expect(cov[1][0]).toBeCloseTo(0.00024, 6); // symmetric
+    expect(cov[1][1]).toBeCloseTo(0.00033, 6);
   });
 
   it('returns empty for empty input', () => {
@@ -66,5 +71,28 @@ describe('ledoitWolfShrinkage', () => {
     ];
     const { shrunk } = ledoitWolfShrinkage(returns);
     expect(shrunk[0][1]).toBeCloseTo(shrunk[1][0], 10);
+  });
+
+  it('shrunk diagonal is between sample diagonal and target (mu)', () => {
+    const returns = [
+      [0.01, -0.01, 0.02, -0.02],
+      [0.02, -0.02, 0.01, -0.01],
+    ];
+    const { shrunk, shrinkageIntensity } = ledoitWolfShrinkage(returns);
+    const sample = sampleCovMatrix(returns);
+    const mu = (sample[0][0] + sample[1][1]) / 2;
+
+    // shrunk[i][i] = delta * mu + (1 - delta) * sample[i][i]
+    // When sample diags are equal, shrunk diag = sample diag = mu
+    // For this symmetric data, both sample diags = 1/3 * 10^-3
+    // mu = average of diags, so when diags are equal, shrunk = sample
+    // In general: shrunk diagonal lies between sample diagonal and mu
+    for (let i = 0; i < 2; i++) {
+      const lo = Math.min(sample[i][i], mu);
+      const hi = Math.max(sample[i][i], mu);
+      // Allow small floating point tolerance
+      expect(shrunk[i][i]).toBeGreaterThanOrEqual(lo - 1e-12);
+      expect(shrunk[i][i]).toBeLessThanOrEqual(hi + 1e-12);
+    }
   });
 });

@@ -5,10 +5,13 @@ describe('VaR', () => {
   const returns = [-0.05, -0.03, -0.02, -0.01, 0.0, 0.01, 0.02, 0.03, 0.04, 0.05,
     -0.04, -0.01, 0.01, 0.02, 0.03, 0.0, -0.02, 0.01, 0.04, 0.02];
 
-  it('historicalVaR returns positive value for losses', () => {
+  // Sorted returns: [-0.05, -0.04, -0.03, -0.02, -0.02, -0.01, -0.01, 0.0, 0.0, 0.01,
+  //   0.01, 0.01, 0.02, 0.02, 0.02, 0.03, 0.03, 0.04, 0.04, 0.05]
+
+  it('historicalVaR returns exact 5th percentile loss', () => {
+    // idx = floor(0.05 * 20) = 1, sorted[1] = -0.04, VaR = -(-0.04) = 0.04
     const var95 = historicalVaR(returns, 0.95);
-    expect(var95).toBeGreaterThan(0);
-    expect(var95).toBeLessThan(0.1);
+    expect(var95).toBe(0.04);
   });
 
   it('historicalVaR at lower confidence is smaller', () => {
@@ -21,10 +24,11 @@ describe('VaR', () => {
     expect(historicalVaR([])).toBe(0);
   });
 
-  it('parametricVaR computes correctly', () => {
-    const var95 = parametricVaR(0.001, 0.02, 0.95);
-    expect(var95).toBeGreaterThan(0);
-    expect(var95).toBeCloseTo(0.02 * 1.645 - 0.001, 3);
+  it('conditionalVaR equals exact average of tail below VaR', () => {
+    // cutoffIdx = floor(0.05 * 20) = 1, tail = sorted.slice(0, 1) = [-0.05]
+    // avg = -0.05, CVaR = -(-0.05) = 0.05
+    const cvar = conditionalVaR(returns, 0.95);
+    expect(cvar).toBe(0.05);
   });
 
   it('conditionalVaR >= historicalVaR', () => {
@@ -37,11 +41,20 @@ describe('VaR', () => {
     expect(conditionalVaR([])).toBe(0);
   });
 
-  it('portfolioVaR with identity covariance and equal weights', () => {
+  it('parametricVaR computes correctly', () => {
+    const var95 = parametricVaR(0.001, 0.02, 0.95);
+    expect(var95).toBeCloseTo(0.02 * 1.645 - 0.001, 3);
+  });
+
+  it('portfolioVaR with diagonal covariance and equal weights', () => {
+    // cov = [[0.04, 0], [0, 0.04]], weights = [0.5, 0.5]
+    // portVar = 0.25*0.04 + 0.25*0.04 = 0.02
+    // portStd = sqrt(0.02) = 0.14142...
+    // z(0.95) = 1.64485..., VaR = 1.64485 * 0.14142 * 100000 = 23261.74
     const cov = [[0.04, 0], [0, 0.04]];
     const weights = [0.5, 0.5];
     const pvar = portfolioVaR(weights, cov, 100000, 0.95);
-    expect(pvar).toBeGreaterThan(0);
+    expect(pvar).toBeCloseTo(23261.74, 0);
   });
 });
 
@@ -60,6 +73,14 @@ describe('normalInvCDF', () => {
 
   it('returns ~2.326 for p=0.99', () => {
     expect(normalInvCDF(0.99)).toBeCloseTo(2.326, 2);
+  });
+
+  it('returns -Infinity for p=0', () => {
+    expect(normalInvCDF(0)).toBe(-Infinity);
+  });
+
+  it('returns Infinity for p=1', () => {
+    expect(normalInvCDF(1)).toBe(Infinity);
   });
 });
 

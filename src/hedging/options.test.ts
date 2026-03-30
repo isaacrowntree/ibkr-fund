@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { coveredCallContracts, estimateStrikeFromDelta, generateCoveredCall, generateCollar, tailRiskPutBudget } from './options';
+import { coveredCallContracts, estimateStrikeFromDelta, generateCoveredCall, generateProtectivePut, generateCollar, tailRiskPutBudget } from './options';
 
 describe('coveredCallContracts', () => {
   it('calculates correct number of contracts', () => {
@@ -31,6 +31,12 @@ describe('estimateStrikeFromDelta', () => {
     const highVol = estimateStrikeFromDelta(250, 0.25, 0.30, 30);
     expect(highVol).toBeGreaterThan(lowVol);
   });
+
+  it('returns currentPrice for delta=0.5', () => {
+    // When targetDelta=0.5, z = 0 (since 0.5 is not < 0.5), so strike = price * (1 + 0) = price
+    const strike = estimateStrikeFromDelta(250, 0.5, 0.20, 30);
+    expect(strike).toBe(250);
+  });
 });
 
 describe('generateCoveredCall', () => {
@@ -55,6 +61,28 @@ describe('generateCoveredCall', () => {
   });
 });
 
+describe('generateProtectivePut', () => {
+  it('generates buy put order', () => {
+    const leg = generateProtectivePut({
+      symbol: 'VTI', sharesHeld: 200, currentPrice: 250,
+      targetDelta: -0.25, maxCostPct: 0.02, minDTE: 30, maxDTE: 45,
+    }, 0.20);
+    expect(leg).not.toBeNull();
+    expect(leg!.type).toBe('put');
+    expect(leg!.action).toBe('buy');
+    expect(leg!.qty).toBe(2); // 200 shares / 100 = 2 contracts
+    expect(leg!.strike).toBeLessThanOrEqual(250 * 0.97); // capped at 97% of price
+  });
+
+  it('returns null for less than 100 shares', () => {
+    const leg = generateProtectivePut({
+      symbol: 'VTI', sharesHeld: 50, currentPrice: 250,
+      targetDelta: -0.25, maxCostPct: 0.02, minDTE: 30, maxDTE: 45,
+    }, 0.20);
+    expect(leg).toBeNull();
+  });
+});
+
 describe('generateCollar', () => {
   it('generates two legs: buy put + sell call', () => {
     const legs = generateCollar({
@@ -66,6 +94,14 @@ describe('generateCollar', () => {
     expect(legs[0].action).toBe('buy');
     expect(legs[1].type).toBe('call');
     expect(legs[1].action).toBe('sell');
+  });
+
+  it('returns empty array for less than 100 shares', () => {
+    const legs = generateCollar({
+      symbol: 'VTI', sharesHeld: 50, currentPrice: 250,
+      putDelta: -0.25, callDelta: 0.25, minDTE: 30, maxDTE: 45,
+    }, 0.20);
+    expect(legs).toEqual([]);
   });
 });
 
