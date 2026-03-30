@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { historicalVaR, parametricVaR, conditionalVaR, portfolioVaR, normalInvCDF, quadraticForm } from './var';
+import { historicalVaR, parametricVaR, conditionalVaR, portfolioVaR, normalInvCDF, normalCDF, quadraticForm } from './var';
 
 describe('VaR', () => {
   const returns = [-0.05, -0.03, -0.02, -0.01, 0.0, 0.01, 0.02, 0.03, 0.04, 0.05,
@@ -81,6 +81,20 @@ describe('normalInvCDF', () => {
 
   it('returns Infinity for p=1', () => {
     expect(normalInvCDF(1)).toBe(Infinity);
+  });
+});
+
+describe('normalCDF', () => {
+  it('returns 0.5 for x=0', () => {
+    expect(normalCDF(0)).toBeCloseTo(0.5, 6);
+  });
+
+  it('returns ~0.95 for x=1.645', () => {
+    expect(normalCDF(1.645)).toBeCloseTo(0.95, 2);
+  });
+
+  it('returns ~0.05 for x=-1.645', () => {
+    expect(normalCDF(-1.645)).toBeCloseTo(0.05, 2);
   });
 });
 
