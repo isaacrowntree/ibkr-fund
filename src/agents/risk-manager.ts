@@ -7,6 +7,8 @@ import { TARGET_PORTFOLIO } from '../config.js';
 import { historicalVaR, conditionalVaR } from '../risk/var.js';
 import { assessDrawdown, maxDrawdown } from '../risk/drawdown.js';
 import { ewmaVolatility, annualizeVol, volTargetLeverage } from '../risk/volatility.js';
+import { correlationStressTest } from '../risk/stress-test.js';
+import { sampleCovMatrix } from '../portfolio/covariance.js';
 import { loadState, saveState } from '../state/store.js';
 import { log, logError } from '../log.js';
 
@@ -61,6 +63,25 @@ async function run(): Promise<void> {
         realizedVol: annVol * 100,
         volTargetLeverage: leverage,
       };
+
+      // Correlation stress test using portfolio weights and covariance
+      const historicalReturns = state.historicalReturns as number[][] | undefined;
+      const optimizedWeights = state.optimizedWeights as { hrp?: number[]; riskParity?: number[] } | undefined;
+      const weights = optimizedWeights?.riskParity || optimizedWeights?.hrp;
+
+      if (historicalReturns && historicalReturns.length >= 2 && weights) {
+        const cov = sampleCovMatrix(historicalReturns);
+        const stress = correlationStressTest(weights, cov, account.netLiquidation);
+        log(`Stress test: baseline VaR $${stress.baselineVaR.toFixed(2)} → stressed VaR $${stress.stressedVaR.toFixed(2)} (corr=0.9)`, AGENT);
+        state.stressTest = {
+          baselineVol: stress.baselineVol,
+          stressedVol: stress.stressedVol,
+          baselineVaR: stress.baselineVaR,
+          stressedVaR: stress.stressedVaR,
+          portfolioValue: stress.portfolioValue,
+          timestamp: new Date().toISOString(),
+        };
+      }
     }
 
     if (dd.level === 'stopped') {

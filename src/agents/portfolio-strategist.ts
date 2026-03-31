@@ -6,6 +6,8 @@ import { connect, disconnect, getAccountSummary, getMarketPrices , requestDelaye
 import { TARGET_PORTFOLIO, validateTargets } from '../config.js';
 import { hrpWeights } from '../portfolio/hrp.js';
 import { riskParityWeights } from '../portfolio/risk-parity.js';
+import { blackLitterman } from '../portfolio/black-litterman.js';
+import { allocateCashFlow } from '../portfolio/cashflow-rebalance.js';
 import { sampleCovMatrix } from '../portfolio/covariance.js';
 import { loadState, saveState } from '../state/store.js';
 import { log, logError } from '../log.js';
@@ -40,12 +42,44 @@ async function run(): Promise<void> {
       log('Risk Parity weights:', AGENT);
       symbols.forEach((s, i) => log(`  ${s}: ${(rp[i] * 100).toFixed(1)}%`, AGENT));
 
-      state.optimizedWeights = { hrp: hrp.weights, riskParity: rp };
+      // Black-Litterman: use equal market weights as prior, no active views
+      const marketWeights = symbols.map(() => 1 / symbols.length);
+      const bl = blackLitterman(cov, marketWeights, {
+        P: [symbols.map((_, i) => (i === 0 ? 1 : 0))],  // simple view: first asset
+        Q: [0.05],  // 5% expected return view
+      });
+      log('Black-Litterman posterior weights:', AGENT);
+      symbols.forEach((s, i) => log(`  ${s}: ${(bl.optimalWeights[i] * 100).toFixed(1)}%`, AGENT));
+
+      state.optimizedWeights = { hrp: hrp.weights, riskParity: rp, blackLitterman: bl.optimalWeights };
     } else {
       log('Insufficient historical data — using static target weights', AGENT);
       log('Target weights:', AGENT);
       for (const t of TARGET_PORTFOLIO) {
         log(`  ${t.symbol}: ${t.pct}% (${t.sleeve})`, AGENT);
+      }
+    }
+
+    // Cash flow rebalancing: if cash exceeds threshold, allocate to underweight positions
+    const CASH_THRESHOLD = 1000;
+    if (account.totalCashValue > CASH_THRESHOLD) {
+      const holdings = TARGET_PORTFOLIO.map(t => {
+        const pos = account.positions.find((p: { symbol: string }) => p.symbol === t.symbol);
+        const price = prices.get(t.symbol) || 0;
+        return {
+          symbol: t.symbol,
+          currentValue: pos ? pos.qty * price : 0,
+          targetPct: t.pct,
+        };
+      });
+
+      const cashOrders = allocateCashFlow(holdings, account.totalCashValue - CASH_THRESHOLD, 100, prices);
+      if (cashOrders.length > 0) {
+        log(`Cash flow rebalance (surplus: $${(account.totalCashValue - CASH_THRESHOLD).toFixed(2)}):`, AGENT);
+        for (const o of cashOrders) {
+          log(`  BUY ${o.shares} ${o.symbol} ($${o.amountUsd.toFixed(2)})`, AGENT);
+        }
+        state.cashFlowOrders = cashOrders;
       }
     }
 

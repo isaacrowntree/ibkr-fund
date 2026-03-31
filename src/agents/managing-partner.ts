@@ -31,6 +31,39 @@ async function run(): Promise<void> {
     state.lastCheckAt = new Date().toISOString();
     state.lastNav = account.netLiquidation;
     state.lastCash = account.totalCashValue;
+
+    // Risk status summary
+    const stressTest = state.stressTest as {
+      baselineVaR?: number; stressedVaR?: number; timestamp?: string;
+    } | undefined;
+    if (stressTest) {
+      log(`Risk — Stress test (${stressTest.timestamp || 'unknown'}):`, AGENT);
+      log(`  Baseline VaR: $${stressTest.baselineVaR?.toFixed(2) ?? 'N/A'} | Stressed VaR: $${stressTest.stressedVaR?.toFixed(2) ?? 'N/A'}`, AGENT);
+    }
+
+    const drawdownLevel = state.drawdownLevel as string | undefined;
+    if (drawdownLevel) {
+      log(`Risk — Drawdown level: ${drawdownLevel}`, AGENT);
+    }
+
+    // Factor attribution summary
+    const factorRegression = state.factorRegression as {
+      dependent?: string; rSquared?: number; alpha?: number; factors?: string[]; betas?: number[];
+    } | undefined;
+    if (factorRegression) {
+      log(`Quant — Factor model R²: ${((factorRegression.rSquared ?? 0) * 100).toFixed(1)}% | Alpha: ${((factorRegression.alpha ?? 0) * 10000).toFixed(2)} bps/day`, AGENT);
+    }
+
+    // Execution quality summary
+    const shortfallMetrics = state.shortfallMetrics as {
+      symbol: string; totalShortfallBps: number; totalShortfallUsd: number;
+    }[] | undefined;
+    if (shortfallMetrics && shortfallMetrics.length > 0) {
+      const avgBps = shortfallMetrics.reduce((s, m) => s + m.totalShortfallBps, 0) / shortfallMetrics.length;
+      const totalUsd = shortfallMetrics.reduce((s, m) => s + m.totalShortfallUsd, 0);
+      log(`Execution — Avg shortfall: ${avgBps.toFixed(1)} bps | Total cost: $${totalUsd.toFixed(2)} (${shortfallMetrics.length} fills)`, AGENT);
+    }
+
     saveState(state);
 
     log('Delegating to Portfolio Strategist, Risk Manager, and Research Scout', AGENT);
