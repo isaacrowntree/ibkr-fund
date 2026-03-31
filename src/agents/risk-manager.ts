@@ -71,6 +71,9 @@ async function run(): Promise<void> {
       log('WARNING: Tightening risk limits', AGENT);
     }
 
+    // Fix #7: Persist drawdown level so execution bot can enforce it
+    state.drawdownLevel = dd.level;
+
     state.navHistory = navHistory;
     state.lastRiskAt = new Date().toISOString();
     saveState(state);

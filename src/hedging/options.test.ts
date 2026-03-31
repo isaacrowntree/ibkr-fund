@@ -32,10 +32,23 @@ describe('estimateStrikeFromDelta', () => {
     expect(highVol).toBeGreaterThan(lowVol);
   });
 
-  it('returns currentPrice for delta=0.5', () => {
-    // When targetDelta=0.5, z = 0 (since 0.5 is not < 0.5), so strike = price * (1 + 0) = price
+  it('returns currentPrice for delta=0.5 (ATM)', () => {
+    // At delta=0.5, otmAmount=0, so strike = currentPrice
     const strike = estimateStrikeFromDelta(250, 0.5, 0.20, 30);
     expect(strike).toBe(250);
+  });
+
+  it('returns strike BELOW current price for puts (delta > 0.5)', () => {
+    // Put with targetDelta=0.75 (passed as 1 + putDelta where putDelta=-0.25)
+    const strike = estimateStrikeFromDelta(250, 0.75, 0.20, 30);
+    expect(strike).toBeLessThan(250);
+  });
+
+  it('put strike moves further OTM with higher delta', () => {
+    // delta=0.9 is deeper OTM put than delta=0.6
+    const nearOtm = estimateStrikeFromDelta(250, 0.6, 0.20, 30);
+    const deepOtm = estimateStrikeFromDelta(250, 0.9, 0.20, 30);
+    expect(deepOtm).toBeLessThan(nearOtm);
   });
 });
 

@@ -6,6 +6,10 @@ import { log, logError } from '../log.js';
 const on = (api: IBApi, event: EventName, fn: (...args: any[]) => void) =>
   (api as any).on(event, fn);
 
+// Helper to remove listeners added via the `on` helper
+const off = (api: IBApi, event: EventName, fn: (...args: any[]) => void) =>
+  (api as any).removeListener(event, fn);
+
 export interface Position {
   symbol: string;
   qty: number;
@@ -30,6 +34,10 @@ export interface TradeResult {
 
 let ibApi: IBApi | null = null;
 let nextOrderId = 0;
+
+/** Monotonic request ID counter to avoid collisions (Fix #9) */
+let nextReqId = 10000;
+function allocateReqId(): number { return nextReqId++; }
 
 export function getApi(): IBApi {
   if (!ibApi) throw new Error('IB Gateway not connected');
@@ -80,25 +88,30 @@ export function disconnect(): void {
 export function getAccountSummary(): Promise<AccountSummary> {
   const api = getApi();
   return new Promise((resolve, reject) => {
-    const reqId = 9001;
+    const reqId = allocateReqId();
     const summary: Partial<AccountSummary> = { positions: [] };
     const positions: Position[] = [];
 
-    // Request account summary
-    api.reqAccountSummary(reqId, 'All', 'NetLiquidation,TotalCashValue');
+    const cleanup = () => {
+      clearTimeout(timer);
+      off(api, EventName.accountSummary, summaryHandler);
+      off(api, EventName.accountSummaryEnd, summaryEndHandler);
+      off(api, EventName.position, positionHandler);
+      off(api, EventName.positionEnd, positionEndHandler);
+    };
 
-    on(api, EventName.accountSummary, (_rid: number, _account: string, tag: string, value: string) => {
+    const summaryHandler = (_rid: number, _account: string, tag: string, value: string) => {
       if (tag === 'NetLiquidation') summary.netLiquidation = parseFloat(value);
       if (tag === 'TotalCashValue') summary.totalCashValue = parseFloat(value);
-    });
+    };
 
-    on(api, EventName.accountSummaryEnd, () => {
+    const summaryEndHandler = () => {
       api.cancelAccountSummary(reqId);
       // Now get positions
       api.reqPositions();
-    });
+    };
 
-    on(api, EventName.position, (_account: string, contract: Contract, pos: number, avgCost: number) => {
+    const positionHandler = (_account: string, contract: Contract, pos: number, avgCost: number) => {
       if (pos !== 0 && contract.symbol) {
         positions.push({
           symbol: contract.symbol,
@@ -108,38 +121,54 @@ export function getAccountSummary(): Promise<AccountSummary> {
           marketPrice: 0,
         });
       }
-    });
+    };
 
-    on(api, EventName.positionEnd, () => {
+    const positionEndHandler = () => {
       api.cancelPositions();
       summary.positions = positions;
+      // Ensure required fields have defaults (Fix #3)
+      if (summary.netLiquidation == null) summary.netLiquidation = 0;
+      if (summary.totalCashValue == null) summary.totalCashValue = 0;
+      cleanup();
       resolve(summary as AccountSummary);
-    });
+    };
 
-    setTimeout(() => reject(new Error('Account summary timed out')), 30_000);
+    // Request account summary
+    api.reqAccountSummary(reqId, 'All', 'NetLiquidation,TotalCashValue');
+
+    on(api, EventName.accountSummary, summaryHandler);
+    on(api, EventName.accountSummaryEnd, summaryEndHandler);
+    on(api, EventName.position, positionHandler);
+    on(api, EventName.positionEnd, positionEndHandler);
+
+    const timer = setTimeout(() => { cleanup(); reject(new Error('Account summary timed out')); }, 30_000);
   });
 }
 
 export function getMarketPrice(symbol: string): Promise<number> {
   const api = getApi();
   return new Promise((resolve, reject) => {
-    const reqId = 10_000 + Math.floor(Math.random() * 10_000);
+    const reqId = allocateReqId();
     const contract: Contract = { symbol, secType: SecType.STK, exchange: 'SMART', currency: 'USD' };
+
+    const tickHandler = (tickReqId: number, _tickType: number, price: number) => {
+      if (tickReqId === reqId && price > 0) {
+        cleanup();
+        resolve(price);
+      }
+    };
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      api.cancelMktData(reqId);
+      off(api, EventName.tickPrice, tickHandler);
+    };
 
     api.reqMktData(reqId, contract, '', true, false);
 
-    const timeout = setTimeout(() => {
-      api.cancelMktData(reqId);
-      reject(new Error(`Market data timeout for ${symbol}`));
-    }, 15_000);
+    const timer = setTimeout(() => { cleanup(); reject(new Error(`Market data timeout for ${symbol}`)); }, 15_000);
 
-    on(api, EventName.tickPrice, (tickReqId: number, _tickType: number, price: number) => {
-      if (tickReqId === reqId && price > 0) {
-        clearTimeout(timeout);
-        api.cancelMktData(reqId);
-        resolve(price);
-      }
-    });
+    on(api, EventName.tickPrice, tickHandler);
   });
 }
 
@@ -171,16 +200,24 @@ export function placeMarketOrder(symbol: string, action: 'BUY' | 'SELL', qty: nu
       transmit: true,
     };
 
-    on(api, EventName.orderStatus, (oid: number, status: string) => {
+    const statusHandler = (oid: number, status: string) => {
       if (oid === orderId && (status === 'Filled' || status === 'Submitted' || status === 'PreSubmitted')) {
+        cleanup();
         resolve({ orderId, symbol, action, qty, status });
       }
-    });
+    };
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      off(api, EventName.orderStatus, statusHandler);
+    };
+
+    on(api, EventName.orderStatus, statusHandler);
 
     api.placeOrder(orderId, contract, order);
     log(`Placed ${action} ${qty} ${symbol} (orderId=${orderId})`);
 
-    setTimeout(() => reject(new Error(`Order timeout for ${action} ${qty} ${symbol}`)), 60_000);
+    const timer = setTimeout(() => { cleanup(); reject(new Error(`Order timeout for ${action} ${qty} ${symbol}`)); }, 60_000);
   });
 }
 
@@ -197,15 +234,23 @@ export function placeLimitOrder(symbol: string, action: 'BUY' | 'SELL', qty: num
       transmit: true,
     };
 
-    on(api, EventName.orderStatus, (oid: number, status: string) => {
+    const statusHandler = (oid: number, status: string) => {
       if (oid === orderId && (status === 'Filled' || status === 'Submitted' || status === 'PreSubmitted')) {
+        cleanup();
         resolve({ orderId, symbol, action, qty, status });
       }
-    });
+    };
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      off(api, EventName.orderStatus, statusHandler);
+    };
+
+    on(api, EventName.orderStatus, statusHandler);
 
     api.placeOrder(orderId, contract, order);
     log(`Placed LIMIT ${action} ${qty} ${symbol} @ $${price.toFixed(2)} (orderId=${orderId})`);
 
-    setTimeout(() => reject(new Error(`Order timeout for ${action} ${qty} ${symbol}`)), 120_000);
+    const timer = setTimeout(() => { cleanup(); reject(new Error(`Order timeout for ${action} ${qty} ${symbol}`)); }, 120_000);
   });
 }

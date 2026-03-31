@@ -49,18 +49,22 @@ export function coveredCallContracts(params: CoveredCallParams): number {
   return Math.floor(coveredShares / 100);
 }
 
-/** Estimate covered call strike from delta target */
+/** Estimate strike from delta target.
+ * For calls (delta 0-0.5): higher delta = closer to ATM = lower strike above spot.
+ * For puts (delta 0.5-1.0 when passed as 1+putDelta): lower value = more OTM below spot.
+ */
 export function estimateStrikeFromDelta(
   currentPrice: number,
   targetDelta: number,
   impliedVol: number,
   daysToExpiry: number
 ): number {
-  // Simplified: strike ≈ price × (1 + z × σ × √T)
-  // where z corresponds to the delta level
   const t = daysToExpiry / 365;
-  const z = targetDelta < 0.5 ? 0.5 + (0.5 - targetDelta) * 2 : 0; // rough approximation
-  return currentPrice * (1 + z * impliedVol * Math.sqrt(t));
+  // otmAmount: 0 at ATM (delta=0.5), 1 at deep OTM
+  const otmAmount = Math.abs(0.5 - targetDelta) * 2;
+  // +1 for OTM calls (strike above spot), -1 for OTM puts (strike below spot)
+  const direction = targetDelta < 0.5 ? 1 : -1;
+  return currentPrice * (1 + direction * otmAmount * impliedVol * Math.sqrt(t));
 }
 
 /** Generate covered call order */

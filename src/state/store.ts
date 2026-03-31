@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, appendFileSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 const STATE_FILE = resolve(process.env.STATE_DIR || '.', 'bot-state.json');
@@ -40,8 +40,7 @@ export function saveState(state: FundState): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const tmp = STATE_FILE + '.tmp';
   writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
-  writeFileSync(STATE_FILE, readFileSync(tmp, 'utf8'), 'utf8');
-  try { require('fs').unlinkSync(tmp); } catch {}
+  renameSync(tmp, STATE_FILE);
 }
 
 export function appendTrade(trade: TradeRecord): void {

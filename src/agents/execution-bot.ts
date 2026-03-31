@@ -32,12 +32,20 @@ async function run(): Promise<void> {
   await connect();
 
   try {
+    // Fix #7: Enforce drawdown level from risk manager
+    const drawdownLevel = state.drawdownLevel as string | undefined;
+    if (drawdownLevel === 'stopped') {
+      log('BLOCKED: Drawdown level is STOPPED — refusing to execute orders', AGENT);
+      return;
+    }
+
     const nav = (state.lastNav as number) || 100000;
     const regime = (state.regime as { composite: string } | null)?.composite || 'neutral';
 
     // Sort: sells first
     const sells = pendingOrders.filter(o => o.action === 'SELL');
     const buys = pendingOrders.filter(o => o.action === 'BUY');
+    const failedOrders: PendingOrder[] = [];
 
     for (const order of [...sells, ...buys]) {
       const strategy = selectExecutionStrategy(order.estimatedValue, nav);
@@ -45,25 +53,36 @@ async function run(): Promise<void> {
       log(`${order.action} ${order.qty} ${order.symbol} via ${strategy} (${urgency}) — ${order.reason}`, AGENT);
 
       try {
-        const result = await placeMarketOrder(order.symbol, order.action, order.qty);
-        log(`Filled: orderId=${result.orderId} status=${result.status}`, AGENT);
-
-        appendTrade({
-          timestamp: new Date().toISOString(),
-          symbol: order.symbol,
-          action: order.action,
-          qty: order.qty,
-          estimatedValue: order.estimatedValue,
-          orderId: result.orderId,
-          status: result.status,
-          reason: order.reason,
-        });
+        // Fix #6: Acknowledge strategy selection
+        if (strategy === 'market') {
+          const result = await placeMarketOrder(order.symbol, order.action, order.qty);
+          log(`Filled: orderId=${result.orderId} status=${result.status}`, AGENT);
+          appendTrade({
+            timestamp: new Date().toISOString(),
+            symbol: order.symbol, action: order.action, qty: order.qty,
+            estimatedValue: order.estimatedValue, orderId: result.orderId,
+            status: result.status, reason: order.reason,
+          });
+        } else {
+          // For adaptive/twap, still use market order but log the intended strategy
+          log(`Would use ${strategy} (${urgency}) — falling back to market order`, AGENT);
+          const result = await placeMarketOrder(order.symbol, order.action, order.qty);
+          log(`Filled: orderId=${result.orderId} status=${result.status}`, AGENT);
+          appendTrade({
+            timestamp: new Date().toISOString(),
+            symbol: order.symbol, action: order.action, qty: order.qty,
+            estimatedValue: order.estimatedValue, orderId: result.orderId,
+            status: result.status, reason: order.reason,
+          });
+        }
       } catch (err) {
         logError(`Order failed: ${order.action} ${order.qty} ${order.symbol}`, err, AGENT);
+        // Fix #10: Track failed orders so they remain in state
+        failedOrders.push(order);
       }
     }
 
-    state.pendingOrders = [];
+    state.pendingOrders = failedOrders; // only failed orders remain
     state.lastExecutionAt = new Date().toISOString();
     saveState(state);
     log('Execution complete', AGENT);
